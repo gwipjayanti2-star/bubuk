@@ -1,0 +1,22 @@
+{
+"name": "Plant Management System",
+"short_name": "PlantSys",
+"description": "Progressive Web App untuk management Bubuk & Gilingan",
+"start_url": "./index.html",
+"display": "standalone",
+"background_color": "#f8fafc",
+"theme_color": "#1e3a8a",
+"icons": [
+{
+"src": "https://cdn-icons-png.flaticon.com/128/2942/2942813.png",
+"sizes": "128x128",
+"type": "image/png"
+},
+{
+"src": "https://cdn-icons-png.flaticon.com/512/2942/2942813.png",
+"sizes": "512x512",
+"type": "image/png",
+"purpose": "any maskable"
+}
+]
+}
