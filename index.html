@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Plant Management PWA</title>
+    
+    <!-- PWA Requirements -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1e3a8a">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2942/2942813.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; -webkit-font-smoothing: antialiased; }
+        
+        .tab-content { display: none; opacity: 0; transition: opacity 0.3s ease-in-out; }
+        .tab-content.active { display: block; opacity: 1; animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes slideUpFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .card-panel { background: white; border-radius: 1rem; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1); border: 1px solid #f1f5f9; }
+        .table-container { border-radius: 0.75rem; overflow: auto; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); border: 1px solid #e2e8f0; background: white;}
+        
+        table { border-collapse: separate; border-spacing: 0; width: 100%; background: white;}
+        th, td { border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; padding: 0.75rem; text-align: center; }
+        th { background-color: #f8fafc; font-weight: 600; color: #475569; position: sticky; top: 0; z-index: 5; font-size: 0.75rem; text-transform: uppercase; }
+        tbody tr:hover { background-color: #f8fafc; }
+        
+        .product-col { text-align: left !important; font-weight: 600; color: #1e293b; position: sticky; left: 0; background: white; z-index: 10; min-width: 130px; box-shadow: 2px 0 4px -2px rgba(0,0,0,0.1); }
+        thead th.product-col { z-index: 20; background-color: #f8fafc; }
+        tr:hover .product-col { background-color: #f8fafc; }
+
+        .category-col { text-align: left !important; position: sticky; left: 130px; background: white; z-index: 10; min-width: 120px; box-shadow: 2px 0 4px -2px rgba(0,0,0,0.1); }
+        thead th.category-col { z-index: 20; background-color: #f8fafc; }
+        tr:hover .category-col { background-color: #f8fafc; }
+        
+        @media (min-width: 768px) {
+            .product-col { width: 220px; min-width: 220px; }
+            .category-col { left: 220px; } 
+        }
+
+        .table-super-compact td { padding: 6px 10px !important; font-size: 12px !important; }
+        
+        #loader, #login-overlay { display: none; }
+        #loader.active, #login-overlay.active { display: flex; }
+
+        .record-list-container { display: flex; flex-direction: column; }
+        .record-item { display: grid; grid-template-columns: 1fr; gap: 0.75rem; padding: 1rem; background-color: white; border-bottom: 1px solid #e2e8f0; align-items: start; }
+        @media (min-width: 768px) { .record-item { grid-template-columns: 1.2fr 2fr 1fr 1.5fr 1.5fr; align-items: center; } }
+        
+        .segmented-btn.active { background-color: white; color: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        
+        .modern-input { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 0.5rem; font-size: 0.875rem; background-color: #f8fafc; }
+        .modern-input:focus { background-color: white; border-color: #3b82f6; outline: none; }
+        .modern-label { display: block; font-size: 0.75rem; font-weight: 600; color: #475569; margin-bottom: 0.25rem; text-transform: uppercase; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800">
+
+    <!-- Login Overlay -->
+    <div id="login-overlay" class="fixed inset-0 bg-slate-900 z-[100] items-center justify-center active">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm m-4 text-center">
+            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fa-solid fa-industry text-blue-600 text-2xl"></i>
+            </div>
+            <h2 class="text-2xl font-black text-slate-800 mb-1">Plant Portal</h2>
+            <p class="text-xs text-slate-500 mb-6">Silakan masuk untuk melanjutkan</p>
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <input type="text" id="username" placeholder="Username" required class="modern-input text-center">
+                <input type="password" id="password" placeholder="Password" required class="modern-input text-center">
+                <button type="submit" id="btn-login" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors">MASUK</button>
+            </form>
+            <p id="login-error" class="text-red-500 text-xs mt-3 hidden"></p>
+        </div>
+    </div>
+
+    <!-- Data Lists -->
+    <datalist id="list-giling-products"></datalist>
+
+    <div id="sidebar-overlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 hidden md:hidden" onclick="toggleSidebar()"></div>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-64 md:w-[260px] bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 fixed md:relative z-40 h-full transform -translate-x-full md:translate-x-0 shadow-2xl md:shadow-none">
+        <div class="h-16 flex items-center justify-between px-5 border-b border-slate-100">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center border border-amber-100"><i class="fa-solid fa-cookie-bite text-amber-500"></i></div>
+                <div class="leading-tight">
+                    <h1 class="text-sm font-black tracking-tight">PLANT SYSTEM</h1>
+                    <span class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Dashboard PWA</span>
+                </div>
+            </div>
+            <button onclick="toggleSidebar()" class="md:hidden text-slate-400 p-2"><i class="fa-solid fa-times"></i></button>
+        </div>
+        
+        <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            <div class="pt-2 pb-1 px-3 text-[10px] font-bold text-slate-400 uppercase">Rekapan Data</div>
+            <button onclick="switchTab('dash-bubuk')" class="nav-btn active-nav w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors" data-target="dash-bubuk"><i class="fa-solid fa-chart-line w-5 text-center"></i> Bubuk & Waste Weekly</button>
+            <button onclick="switchTab('dash-giling')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors" data-target="dash-giling"><i class="fa-solid fa-chart-pie w-5 text-center"></i> Rekapan Giling</button>
+            <button onclick="switchTab('planning-view')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors" data-target="planning-view"><i class="fa-solid fa-table-list w-5 text-center"></i> Info Planning</button>
+            
+            <div id="operator-menu" class="hidden">
+                <div class="pt-5 pb-1 px-3 text-[10px] font-bold text-slate-400 uppercase">Daily Input</div>
+                <button onclick="switchTab('giling-input')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors" data-target="giling-input"><i class="fa-solid fa-mortar-pestle w-5 text-center"></i> Input Giling</button>
+            </div>
+        </nav>
+        
+        <div class="p-4 border-t border-slate-100 flex items-center gap-3 justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600"><i class="fa-solid fa-user text-xs"></i></div>
+                <div>
+                    <p id="user-display" class="text-xs font-bold text-slate-800">User</p>
+                    <p id="role-display" class="text-[10px] text-slate-500 capitalize">Role</p>
+                </div>
+            </div>
+            <button onclick="logout()" class="text-red-500 hover:text-red-700 p-2"><i class="fa-solid fa-right-from-bracket"></i></button>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col overflow-hidden relative w-full bg-slate-50/50">
+        <header class="bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 md:px-6 h-16 flex justify-between items-center z-20 sticky top-0">
+            <div class="flex items-center gap-3">
+                <button onclick="toggleSidebar()" class="md:hidden w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center"><i class="fa-solid fa-bars"></i></button>
+                <h2 id="page-title" class="text-base md:text-lg font-bold text-slate-800">Dashboard Bubuk</h2>
+            </div>
+            <div id="plant-selector-container" class="flex bg-slate-200 p-1 rounded-lg">
+                <button onclick="setGlobalPlant('1112')" id="btn-plant-1112" class="segmented-btn active px-4 py-1 text-sm font-bold rounded">1112</button>
+                <button onclick="setGlobalPlant('1113')" id="btn-plant-1113" class="segmented-btn px-4 py-1 text-sm font-bold rounded">1113</button>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto p-3 md:p-6 relative">
+            <div id="loader" class="absolute inset-0 bg-slate-50/80 z-50 items-center justify-center backdrop-blur-sm">
+                <div class="flex flex-col items-center bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
+                    <div class="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+                    <p class="mt-4 text-sm font-semibold text-slate-600" id="loader-text">Memproses data...</p>
+                </div>
+            </div>
+
+            <!-- WEEKLY BUBUK & WASTE DASHBOARD -->
+            <div id="dash-bubuk" class="tab-content active space-y-4 md:space-y-6 w-full max-w-full lg:max-w-7xl mx-auto">
+                <div class="card-panel p-4 md:p-6">
+                    <div class="flex items-center gap-3 mb-2">
+                        <i class="fa-solid fa-chart-column text-blue-600 text-2xl"></i>
+                        <div>
+                            <h3 class="text-base md:text-lg font-bold text-slate-800">Dashboard Bubuk & Waste Weekly</h3>
+                            <p class="text-xs text-slate-500 font-medium">Plant <span class="plant-label">1112</span> | <span id="current-week-info" class="text-blue-600 font-bold"></span></p>
+                        </div>
+                    </div>
+                    <p class="text-[10px] bg-amber-50 text-amber-700 p-2 rounded border border-amber-200 inline-block mb-4"><i class="fa-solid fa-circle-info mr-1"></i> Perhitungan Week otomatis berpindah setiap hari Sabtu.</p>
+                    
+                    <div class="table-container overflow-x-auto max-h-[500px]">
+                        <table id="bubuk-dashboard-table" class="min-w-full">
+                            <thead id="bubuk-dashboard-thead"></thead>
+                            <tbody id="bubuk-dashboard-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- INFO PLANNING -->
+            <div id="planning-view" class="tab-content max-w-full lg:max-w-5xl mx-auto">
+                <div class="card-panel p-4 md:p-6">
+                    <div class="flex flex-wrap justify-between items-center mb-3 border-b border-slate-100 pb-2">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-teal-600"></i>
+                            <h3 class="text-sm md:text-base font-bold text-slate-800">Material Planning Plant <span class="plant-label">1112</span></h3>
+                        </div>
+                        <button onclick="loadPlanningData()" class="px-3 py-1.5 bg-teal-50 text-teal-700 border border-teal-200 rounded text-xs font-bold transition-colors">Refresh</button>
+                    </div>
+                    <div class="table-container overflow-x-auto max-h-[65vh]">
+                        <table id="planning-table" class="table-super-compact w-full">
+                            <thead id="planning-thead"></thead>
+                            <tbody id="planning-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DASHBOARD GILING -->
+            <div id="dash-giling" class="tab-content space-y-4 md:space-y-6 w-full max-w-full lg:max-w-7xl mx-auto">
+                <div class="card-panel p-4 md:p-6">
+                    <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4">
+                        <div>
+                            <h3 class="text-base md:text-lg font-bold text-slate-800">Riwayat Gilingan</h3>
+                            <p class="text-xs text-slate-500 font-medium">Rekapitulasi produksi giling</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+                            <input type="date" id="giling-start-date" onchange="applyGilingFilters()" class="px-3 py-2 border rounded-lg text-xs font-semibold">
+                            <span class="text-slate-300"><i class="fa-solid fa-arrow-right text-[10px]"></i></span>
+                            <input type="date" id="giling-end-date" onchange="applyGilingFilters()" class="px-3 py-2 border rounded-lg text-xs font-semibold">
+                            
+                            <select id="giling-group-filter" onchange="applyGilingFilters()" class="px-3 py-2 bg-white border rounded-lg text-xs font-semibold">
+                                <option value="All">Semua Grup</option>
+                                <option value="A">Grup A</option><option value="B">Grup B</option><option value="C">Grup C</option>
+                            </select>
+                            <button onclick="loadDashGiling()" class="px-4 py-2 bg-slate-100 rounded-lg text-xs font-bold"><i class="fa-solid fa-rotate-right"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                        <div class="p-4 bg-purple-50 border border-purple-100 rounded-xl">
+                            <p class="text-[10px] font-bold text-purple-600 uppercase mb-1">Total (KG)</p>
+                            <p id="giling-grand-total" class="text-2xl md:text-3xl font-black text-slate-800">0</p>
+                        </div>
+                        <div class="p-4 bg-white border border-slate-200 rounded-xl"><p class="text-[10px] font-bold text-slate-500 uppercase mb-1">Shift 1</p><p id="giling-shift1-total" class="text-xl font-bold">0</p></div>
+                        <div class="p-4 bg-white border border-slate-200 rounded-xl"><p class="text-[10px] font-bold text-slate-500 uppercase mb-1">Shift 2</p><p id="giling-shift2-total" class="text-xl font-bold">0</p></div>
+                        <div class="p-4 bg-white border border-slate-200 rounded-xl"><p class="text-[10px] font-bold text-slate-500 uppercase mb-1">Shift 3</p><p id="giling-shift3-total" class="text-xl font-bold">0</p></div>
+                    </div>
+
+                    <div class="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                        <div id="giling-list-container" class="record-list-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- INPUT GILING -->
+            <div id="giling-input" class="tab-content max-w-full lg:max-w-4xl mx-auto">
+                <div class="card-panel p-5 md:p-8 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-purple-500"></div>
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600"><i class="fa-solid fa-mortar-pestle"></i></div>
+                        <h3 class="text-base md:text-lg font-bold text-slate-800">Input Daily Giling</h3>
+                    </div>
+                    <form onsubmit="submitGiling(event)" class="space-y-4">
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                            <div class="col-span-2 md:col-span-1"><label class="modern-label">Tanggal</label><input type="date" id="giling-date" required class="modern-input"></div>
+                            <div><label class="modern-label">Shift</label><select id="giling-shift" required class="modern-input"><option value="1">Shift 1</option><option value="2">Shift 2</option><option value="3">Shift 3</option></select></div>
+                            <div><label class="modern-label">Grup</label><select id="giling-grup" required class="modern-input"><option value="A">Grup A</option><option value="B">Grup B</option><option value="C">Grup C</option></select></div>
+                            <div><label class="modern-label">MPP Giling</label><input type="number" step="0.01" id="giling-mpp" class="modern-input"></div>
+                            <div><label class="modern-label">MPP Sortir</label><input type="number" step="0.01" id="giling-sortir" class="modern-input"></div>
+                        </div>
+                        
+                        <div class="mt-4 pt-4 border-t border-slate-100">
+                            <h4 class="text-sm font-bold text-slate-700 mb-3">Detail Produk Giling</h4>
+                            <div id="giling-rows-container" class="space-y-3"></div>
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row justify-between items-center mt-6 gap-3">
+                            <button type="button" onclick="addGilingRow()" class="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg text-xs border border-slate-200">+ Tambah Baris</button>
+                            <button type="submit" id="btn-submit-giling" class="w-full sm:w-auto px-8 py-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-sm transition-colors">Simpan Data Giling</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div id="toast" class="fixed top-5 right-5 z-50 bg-slate-900 text-white px-5 py-3 rounded-lg shadow-xl transform -translate-y-24 opacity-0 transition-all flex items-center">
+                <i class="fa-solid fa-circle-check text-green-400 mr-3"></i> <span id="toast-msg" class="text-sm font-medium">Berhasil</span>
+            </div>
+        </div>
+    </main>
+
+    <script type="text/javascript">
+        // ==========================================
+        // GANTI URL INI DENGAN URL WEB APP GOOGLE APPS SCRIPT ANDA
+        // ==========================================
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwJB-DSSTbuFECNuoWDcXVWEXtQHgttSovI1EeFBbPdjC0HZd_hPg1YDkzq3RRq9JfS/exec";
+        
+        // PWA Setup
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js'); });
+        }
+
+        const MASTER_GILING = ["SGC Cream", "SGC Kulit", "Abon", "Tomyum", "SCO", "MCR", "COCONUT", "RSC Cream", "RSC Kulit", "Malju Kulit", "Malju Cream", "Malju India Cream", "Malju India Kulit", "MDC Kulit", "MDC Cream", "COCONUT 2", "CHOKY Kulit", "CHOKY Cream", "Malju Cream Korea", "Malju Kulit Korea"];
+        let currentPlant = '1112';
+        let rawGilingData = [];
+        let gilingRowCount = 0;
+        let currentUser = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            checkLoginStatus();
+            
+            const datalist = document.getElementById('list-giling-products');
+            MASTER_GILING.forEach(p => datalist.innerHTML += `<option value="${p}">`);
+            
+            const today = new Date();
+            if(document.getElementById('giling-date')) document.getElementById('giling-date').valueAsDate = today;
+            
+            let lastWeek = new Date(); lastWeek.setDate(lastWeek.getDate() - 7);
+            document.getElementById('giling-start-date').valueAsDate = lastWeek;
+            document.getElementById('giling-end-date').valueAsDate = today;
+            
+            // Set Current Week Display (Sabtu geser ke minggu depan)
+            document.getElementById('current-week-info').innerText = `Week ${getCustomWeekNumber(new Date())}`;
+        });
+
+        // --- AUTHENTICATION ---
+        function checkLoginStatus() {
+            const saved = localStorage.getItem('plantAppUser');
+            if(saved) {
+                currentUser = JSON.parse(saved);
+                document.getElementById('login-overlay').classList.remove('active');
+                setupUserUI();
+            }
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            const btn = document.getElementById('btn-login');
+            const err = document.getElementById('login-error');
+            
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btn.disabled = true; err.classList.add('hidden');
+
+            fetch(`${GAS_WEB_APP_URL}?action=login`, {
+                method: 'POST',
+                body: new URLSearchParams({ username: u, password: p }),
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    currentUser = { username: data.username, role: data.role };
+                    localStorage.setItem('plantAppUser', JSON.stringify(currentUser));
+                    document.getElementById('login-overlay').classList.remove('active');
+                    setupUserUI();
+                } else {
+                    err.innerText = data.message || "Gagal Login"; err.classList.remove('hidden');
+                }
+            })
+            .catch(() => { err.innerText = "Koneksi Error"; err.classList.remove('hidden'); })
+            .finally(() => { btn.innerHTML = 'MASUK'; btn.disabled = false; });
+        }
+
+        function logout() { localStorage.removeItem('plantAppUser'); location.reload(); }
+
+        function setupUserUI() {
+            document.getElementById('user-display').innerText = currentUser.username;
+            document.getElementById('role-display').innerText = currentUser.role;
+            
+            if(currentUser.role === 'operator') {
+                document.getElementById('operator-menu').classList.remove('hidden');
+                addGilingRow();
+            } else {
+                document.getElementById('operator-menu').classList.add('hidden');
+            }
+            
+            setGlobalPlant('1112');
+            switchTab('dash-bubuk');
+        }
+
+        // --- UTILS ---
+        // Aturan: Week bertambah setiap Sabtu. Jadi Sabtu & Minggu dihitung sebagai minggu depannya.
+        function getCustomWeekNumber(d) {
+            let adj = new Date(d);
+            adj.setDate(adj.getDate() + 2); // Shift Sat/Sun to Mon/Tue
+            adj.setHours(0,0,0,0);
+            adj.setDate(adj.getDate() + 3 - (adj.getDay() + 6) % 7);
+            var w1 = new Date(adj.getFullYear(), 0, 4);
+            return 1 + Math.round(((adj.getTime() - w1.getTime()) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7);
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast'); document.getElementById('toast-msg').innerText = msg;
+            t.classList.remove('-translate-y-24', 'opacity-0');
+            setTimeout(() => t.classList.add('-translate-y-24', 'opacity-0'), 3000);
+        }
+
+        function toggleSidebar() { 
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.toggle('-translate-x-full'); 
+            if(sidebar.classList.contains('-translate-x-full')) {
+                overlay.classList.add('opacity-0'); setTimeout(() => overlay.classList.add('hidden'), 300);
+            } else {
+                overlay.classList.remove('hidden'); setTimeout(() => overlay.classList.remove('opacity-0'), 10);
+            }
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            
+            document.querySelectorAll('.nav-btn').forEach(el => {
+                el.classList.remove('bg-blue-50', 'text-blue-700', 'active-nav');
+                if(el.dataset.target === tabId) el.classList.add('bg-blue-50', 'text-blue-700', 'active-nav');
+            });
+            
+            if(window.innerWidth < 768) toggleSidebar();
+
+            const pSelector = document.getElementById('plant-selector-container');
+            pSelector.style.display = (tabId === 'giling-input' || tabId === 'dash-giling') ? 'none' : 'flex';
+
+            if(tabId === 'dash-bubuk') loadDashBubuk();
+            if(tabId === 'dash-giling') loadDashGiling();
+            if(tabId === 'planning-view') loadPlanningData();
+        }
+
+        function setGlobalPlant(plant) {
+            currentPlant = plant;
+            document.getElementById('btn-plant-1112').classList.toggle('active', plant === '1112');
+            document.getElementById('btn-plant-1113').classList.toggle('active', plant === '1113');
+            document.querySelectorAll('.plant-label').forEach(el => el.innerText = plant);
+            
+            const activeTab = document.querySelector('.tab-content.active');
+            if(activeTab) {
+                if(activeTab.id === 'dash-bubuk') loadDashBubuk();
+                if(activeTab.id === 'planning-view') loadPlanningData();
+            }
+        }
+
+        // --- DASHBOARD DATA FETCHING ---
+        async function fetchAPI(action, params = {}) {
+            const loader = document.getElementById('loader'); loader.classList.add('active');
+            try {
+                let url = `${GAS_WEB_APP_URL}?action=${action}`;
+                for(let key in params) url += `&${key}=${encodeURIComponent(params[key])}`;
+                
+                let res = await fetch(url);
+                let json = await res.json();
+                loader.classList.remove('active');
+                return json;
+            } catch (e) {
+                loader.classList.remove('active'); showToast("Gagal mengambil data");
+                console.error(e); return { success: false };
+            }
+        }
+
+        async function loadDashBubuk() {
+            let data = await fetchAPI('getData', { view: 'weekly_bubuk', plant: currentPlant });
+            if(data && data.success) renderBubuk10Weeks(data.data);
+        }
+
+        function renderBubuk10Weeks(data) {
+            if(!data || data.length < 2) return;
+            let currentWeek = getCustomWeekNumber(new Date());
+            let startWeek = Math.max(1, currentWeek - 9); 
+            
+            let htmlHead = `<tr><th class="product-col">PRODUK MATERIAL</th><th class="category-col text-left font-bold">KATEGORI</th>`;
+            for(let w = startWeek; w <= currentWeek; w++) htmlHead += `<th>W${w}</th>`;
+            htmlHead += `</tr>`;
+            document.getElementById('bubuk-dashboard-thead').innerHTML = htmlHead;
+
+            let bodyHtml = '';
+            let sortedData = [...data.filter(r => r[0].toUpperCase()==='TOTAL'), ...data.slice(1).filter(r => r[0].toUpperCase()!=='TOTAL')];
+            let productCounts = {};
+            sortedData.forEach(r => { productCounts[r[0]] = (productCounts[r[0]] || 0) + 1; });
+            let renderedProducts = {};
+
+            sortedData.forEach(row => {
+                let p = row[0], c = row[1];
+                let isGrandTotal = p.toUpperCase() === 'TOTAL';
+                let isCatTotal = c.toUpperCase() === 'TOTAL';
+                let trClass = isGrandTotal ? 'bg-blue-50 font-bold' : (isCatTotal ? 'bg-slate-50 font-semibold' : 'border-b border-slate-100');
+
+                bodyHtml += `<tr class="${trClass}">`;
+                if (!renderedProducts[p]) {
+                    bodyHtml += `<td class="product-col align-top border-r border-slate-200" rowspan="${productCounts[p]}">${p}</td>`;
+                    renderedProducts[p] = true;
+                }
+                bodyHtml += `<td class="category-col text-xs ${isCatTotal ? 'font-bold' : 'pl-4'}">${c}</td>`;
+
+                for(let w = startWeek; w <= currentWeek; w++) {
+                    let val = parseFloat(row[1+w]) || 0; 
+                    bodyHtml += `<td>${val > 0 ? val.toLocaleString('id-ID') : '-'}</td>`;
+                }
+                bodyHtml += `</tr>`;
+            });
+            document.getElementById('bubuk-dashboard-tbody').innerHTML = bodyHtml;
+        }
+
+        async function loadPlanningData() {
+            let data = await fetchAPI('getData', { view: 'planning', plant: currentPlant });
+            if(data && data.success) {
+                const thead = document.getElementById('planning-thead');
+                const tbody = document.getElementById('planning-tbody');
+                thead.innerHTML = ''; tbody.innerHTML = '';
+                let d2D = data.data;
+                
+                let headHTML = '<tr>';
+                d2D[0].forEach((col, i) => { headHTML += `<th class="${i===0 ? 'text-center w-10' : (i===2 ? 'text-right' : 'text-left')}">${col}</th>`; });
+                thead.innerHTML = headHTML + '</tr>';
+
+                let bodyHTML = '';
+                for (let r = 1; r < d2D.length; r++) {
+                    let hasLine = d2D[r][0] && d2D[r][0].toString().trim() !== "";
+                    bodyHTML += `<tr class="${hasLine ? 'border-t-2 border-slate-300 bg-slate-50/50' : ''} hover:bg-slate-50">`;
+                    for (let c = 0; c < 3; c++) bodyHTML += `<td>${d2D[r][c] || ''}</td>`;
+                    bodyHTML += '</tr>';
+                }
+                tbody.innerHTML = bodyHTML;
+            }
+        }
+
+        async function loadDashGiling() {
+            let data = await fetchAPI('getData', { view: 'giling_raw' });
+            if(data && data.success) { rawGilingData = data.data; applyGilingFilters(); }
+        }
+
+        function applyGilingFilters() {
+            if(!rawGilingData || rawGilingData.length <= 1) return;
+            let sd = new Date(document.getElementById('giling-start-date').value || 0);
+            let ed = new Date(document.getElementById('giling-end-date').value || new Date()); ed.setHours(23,59,59);
+            let group = document.getElementById('giling-group-filter').value;
+
+            let fData = [], gTotal = 0, sTotals = {1:0, 2:0, 3:0};
+
+            for(let i=1; i<rawGilingData.length; i++) {
+                let r = rawGilingData[i];
+                let d = r[0] ? new Date(r[0]) : null;
+                if(!d || d < sd || d > ed || (group !== 'All' && r[2] !== group)) continue;
+                
+                fData.push(r);
+                let qty = parseFloat(r[7]) || 0; gTotal += qty;
+                let sh = parseInt(r[1]) || 0; if(sh>=1 && sh<=3) sTotals[sh] += qty;
+            }
+
+            document.getElementById('giling-grand-total').innerText = gTotal.toLocaleString('id-ID');
+            document.getElementById('giling-shift1-total').innerText = sTotals[1].toLocaleString('id-ID');
+            document.getElementById('giling-shift2-total').innerText = sTotals[2].toLocaleString('id-ID');
+            document.getElementById('giling-shift3-total').innerText = sTotals[3].toLocaleString('id-ID');
+
+            let html = fData.length === 0 ? '<div class="p-8 text-center text-slate-500">Tidak ada data gilingan.</div>' : '';
+            fData.sort((a, b) => new Date(b[0]) - new Date(a[0])).forEach(r => {
+                let bCls = r[1]==='1' ? "bg-blue-100 text-blue-800" : (r[1]==='2' ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800");
+                html += `
+                <div class="record-item">
+                    <div><div class="text-sm font-bold">${new Date(r[0]).toLocaleDateString('id-ID')}</div><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${bCls}">SHIFT ${r[1]}</span></div>
+                    <div><div class="text-sm font-bold">${r[5] || '-'}</div><span class="text-[10px] text-slate-500">Prod: ${r[6]?new Date(r[6]).toLocaleDateString('id-ID'):'-'}</span></div>
+                    <div class="text-lg font-black">${(parseFloat(r[7])||0).toLocaleString('id-ID')} <span class="text-[10px] text-slate-400">KG</span></div>
+                    <div class="text-xs font-semibold">Grup ${r[2]} (G:${r[3]||0} S:${r[4]||0})</div>
+                    <div class="text-xs text-slate-500">${r[8] || '-'}</div>
+                </div>`;
+            });
+            document.getElementById('giling-list-container').innerHTML = html;
+        }
+
+        // --- INPUT GILING ---
+        function addGilingRow() {
+            if (gilingRowCount >= 6) return showToast("Maksimal 6 baris produk!");
+            gilingRowCount++;
+            let html = `
+                <div class="giling-row grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 p-4 border bg-slate-50 rounded-xl relative">
+                    <span class="absolute -top-2 -left-2 bg-slate-800 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold">${gilingRowCount}</span>
+                    <div><label class="modern-label text-[10px]">Nama Produk</label><input type="text" list="list-giling-products" class="g-prod modern-input py-1.5" required></div>
+                    <div><label class="modern-label text-[10px]">Prod Date</label><input type="date" class="g-date modern-input py-1.5" required></div>
+                    <div><label class="modern-label text-[10px]">Qty Giling (KG)</label><input type="number" step="0.01" class="g-qty modern-input py-1.5 font-bold" required></div>
+                    <div><label class="modern-label text-[10px]">Catatan</label><input type="text" class="g-cat modern-input py-1.5"></div>
+                </div>`;
+            document.getElementById('giling-rows-container').insertAdjacentHTML('beforeend', html);
+        }
+
+        async function submitGiling(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-submit-giling');
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...'; btn.disabled = true;
+
+            let formData = {
+                date: document.getElementById('giling-date').value,
+                shift: document.getElementById('giling-shift').value,
+                grup: document.getElementById('giling-grup').value,
+                mppGiling: document.getElementById('giling-mpp').value,
+                mppSortir: document.getElementById('giling-sortir').value,
+                items: []
+            };
+
+            document.querySelectorAll('.giling-row').forEach(row => {
+                formData.items.push({
+                    product: row.querySelector('.g-prod').value,
+                    prodDate: row.querySelector('.g-date').value,
+                    qty: row.querySelector('.g-qty').value,
+                    catatan: row.querySelector('.g-cat').value
+                });
+            });
+
+            try {
+                let res = await fetch(`${GAS_WEB_APP_URL}?action=saveGiling`, {
+                    method: 'POST',
+                    body: new URLSearchParams({ data: JSON.stringify(formData) }),
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                });
+                let json = await res.json();
+                if(json.success) {
+                    showToast(json.message);
+                    e.target.reset(); document.getElementById('giling-rows-container').innerHTML = ''; gilingRowCount=0; addGilingRow();
+                } else showToast("Gagal menyimpan data.");
+            } catch (err) {
+                showToast("Error Koneksi.");
+            } finally {
+                btn.innerHTML = 'Simpan Data Giling'; btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
